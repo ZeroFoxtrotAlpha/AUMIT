@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
+import subprocess
+import json
 
 # Morse code dictionaries
 MORSE_CODE_DICT = {
@@ -26,7 +28,6 @@ MORSE_CODE_DICT = {
 }
 REVERSE_DICT = {v: k for k, v in MORSE_CODE_DICT.items()}
 
-# Translator functions
 def text_to_morse(text):
     text = text.upper()
     return ' '.join(MORSE_CODE_DICT.get(c, '?') for c in text)
@@ -39,34 +40,44 @@ def morse_to_text(morse):
         decoded.append(''.join(REVERSE_DICT.get(l, '?') for l in letters))
     return ' '.join(decoded)
 
-# GUI app
+def ask_ollama(question):
+    try:
+        command = [
+            "ollama", "run", "llama3:instruct",
+            f"{question} Respond in 40 words or fewer."
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode == 0:
+            return result.stdout.strip()
+        else:
+            return "Error calling Ollama."
+    except Exception as e:
+        return f"Error: {e}"
+
 class MorseApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Morse Code Translator")
-        self.root.geometry("500x350")
+        self.root.title("Morse Code Translator + LLaMA3 Interface")
+        self.root.geometry("600x400")
         self.root.resizable(False, False)
 
         self.mode = tk.StringVar(value="text_to_morse")
 
-        # Mode selection
         tk.Label(root, text="Mode:", font=("Arial", 12)).pack(pady=5)
         mode_frame = tk.Frame(root)
         mode_frame.pack()
         tk.Radiobutton(mode_frame, text="Text to Morse", variable=self.mode, value="text_to_morse").pack(side=tk.LEFT, padx=10)
         tk.Radiobutton(mode_frame, text="Morse to Text", variable=self.mode, value="morse_to_text").pack(side=tk.LEFT, padx=10)
+        tk.Radiobutton(mode_frame, text="Ask LLaMA3 via Morse", variable=self.mode, value="morse_to_llama").pack(side=tk.LEFT, padx=10)
 
-        # Input text box
         tk.Label(root, text="Input:", font=("Arial", 12)).pack(pady=(10, 0))
-        self.input_box = tk.Text(root, height=5, width=55)
+        self.input_box = tk.Text(root, height=5, width=65)
         self.input_box.pack()
 
-        # Translate button
-        tk.Button(root, text="Translate", command=self.translate).pack(pady=10)
+        tk.Button(root, text="Translate / Ask", command=self.translate).pack(pady=10)
 
-        # Output text box
         tk.Label(root, text="Output:", font=("Arial", 12)).pack(pady=(10, 0))
-        self.output_box = tk.Text(root, height=5, width=55, state='disabled')
+        self.output_box = tk.Text(root, height=6, width=65, state='disabled')
         self.output_box.pack()
 
     def translate(self):
@@ -76,10 +87,17 @@ class MorseApp:
             return
 
         try:
-            if self.mode.get() == "text_to_morse":
+            mode = self.mode.get()
+            if mode == "text_to_morse":
                 result = text_to_morse(input_text)
-            else:
+            elif mode == "morse_to_text":
                 result = morse_to_text(input_text)
+            elif mode == "morse_to_llama":
+                question = morse_to_text(input_text)
+                llama_response = ask_ollama(question)
+                result = text_to_morse(llama_response)
+            else:
+                result = "Invalid mode."
 
             self.output_box.config(state='normal')
             self.output_box.delete("1.0", tk.END)
@@ -89,7 +107,6 @@ class MorseApp:
         except Exception as e:
             messagebox.showerror("Error", f"Something went wrong: {e}")
 
-# Run the GUI app
 if __name__ == "__main__":
     root = tk.Tk()
     app = MorseApp(root)
